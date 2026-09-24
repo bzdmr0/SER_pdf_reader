@@ -93,10 +93,21 @@ def write_excel(pdfs, out, log=print):
         c.font = Font(bold=True)
 
     all_ok = True
+    row = 1  # son yazılan satır (boş satırlar max_row'u ilerletmediği için elle sayılır)
     for pdf in pdfs:
         records, pdf_toplam = parse_pdf(pdf)
+        first = row + 1
         for r in records:
             ws.append([r["dosya"], r["sayfa"], r["ad"], r["tc"], r["tarih"], r["brut"], r["matrah"], r["terkin"]])
+        # Her PDF'in kendi toplam satırı (PDF'ler birbirine karışmasın)
+        last = row + len(records)
+        sums = [f"=SUM({c}{first}:{c}{last})" if records else 0 for c in "FGH"]
+        ws.append([f"{pdf.name} TOPLAM", None, None, None, None, *sums])
+        for c in ws[ws.max_row]:
+            c.font = Font(bold=True)
+            c.fill = PatternFill("solid", fgColor="DDEBF7")
+        row = last + 2  # toplam satırı + boş satır
+        ws.append([])
         brut_sum = round(sum(r["brut"] for r in records), 2)
         terkin_sum = round(sum(r["terkin"] or 0 for r in records), 2)
         ok = pdf_toplam is not None and abs(terkin_sum - pdf_toplam) < 0.01 and all(r["terkin"] is not None for r in records)
@@ -107,11 +118,6 @@ def write_excel(pdfs, out, log=print):
         log(f"{pdf.name}: {len(records)} personel, brüt toplam {brut_sum:,.2f} "
               f"({'kontrol TAMAM' if ok else f'UYUMSUZ: okunan terkin {terkin_sum:,.2f} / PDF {pdf_toplam}'})")
 
-    last = ws.max_row
-    ws.append([])
-    ws.append(["TOPLAM", None, None, None, None, f"=SUM(F2:F{last})", f"=SUM(G2:G{last})", f"=SUM(H2:H{last})"])
-    for c in ws[ws.max_row]:
-        c.font = Font(bold=True)
     for sheet in (ws, kontrol):
         for col in sheet.columns:
             if col[0].column_letter in "FGH" or sheet is kontrol:
